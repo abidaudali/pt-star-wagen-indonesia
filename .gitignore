@@ -1,0 +1,15 @@
+# Environment & Secrets
+.env
+.env.*
+*.local
+
+# Backup files
+*.bak
+*.bak_*
+
+# Duplicate / temp directories
+swi/
+node_modules/
+.vercel
+dist/
+build/
