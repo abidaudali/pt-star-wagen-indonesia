@@ -5201,6 +5201,17 @@
     const STORAGE_THEME_KEY = "swi_theme";
     const STORAGE_FIREBASE_KEY = "swi_firebase_config_v1";
 
+    // Konfigurasi Default Firebase Realtime (Project: pt-swi-inventory)
+    const DEFAULT_FIREBASE_CONFIG = {
+      apiKey: "AIzaSyDZyuPF1kdQbLG-nP8UX7RCySWZwv1uJx0",
+      authDomain: "pt-swi-inventory.firebaseapp.com",
+      projectId: "pt-swi-inventory",
+      storageBucket: "pt-swi-inventory.firebasestorage.app",
+      messagingSenderId: "766566401138",
+      appId: "1:766566401138:web:9e99494ee2546cf7cb2eeb",
+      measurementId: "G-QNV5BWYZN0"
+    };
+
     // Application State
     let inventory = [];
     let stockLogs = [];
@@ -5549,19 +5560,23 @@
     // 2B. FIREBASE REALTIME CLOUD INTEGRATION
     // ==========================================
     function initFirebaseCloud() {
+      let config = null;
       const savedConfig = localStorage.getItem(STORAGE_FIREBASE_KEY);
-      if (!savedConfig) {
+      if (savedConfig) {
+        try { config = JSON.parse(savedConfig); } catch (e) { }
+      }
+      
+      // Jika belum ada config tersimpan di browser, gunakan konfigurasi bawaan pt-swi-inventory
+      if (!config || !config.apiKey) {
+        config = DEFAULT_FIREBASE_CONFIG;
+      }
+
+      if (!config || !config.apiKey || !config.projectId) {
         updateCloudStatusBadge(false, "Cloud Belum Aktif");
         return;
       }
 
       try {
-        const config = JSON.parse(savedConfig);
-        if (!config.apiKey || !config.projectId) {
-          updateCloudStatusBadge(false, "Config Tidak Lengkap");
-          return;
-        }
-
         // Inisialisasi Firebase App
         let app;
         if (window.firebase && firebase.apps && firebase.apps.length > 0) {
@@ -5573,11 +5588,11 @@
         if (window.firebase && firebase.firestore) {
           db = firebase.firestore();
           isCloudConnected = true;
-          updateCloudStatusBadge(true, "Cloud Realtime Aktif");
 
           // Pasang Realtime Listener untuk Master Data Inventory
           if (firestoreUnsubscribe) firestoreUnsubscribe();
           firestoreUnsubscribe = db.collection("swi_inventory").doc("master_data").onSnapshot((doc) => {
+            updateCloudStatusBadge(true, "Cloud Realtime Aktif");
             if (doc.exists) {
               const cloudData = doc.data();
               if (Array.isArray(cloudData.items) && cloudData.items.length > 0) {
@@ -5586,12 +5601,18 @@
                 refreshUI();
               }
             } else {
-              // Jika data di cloud masih kosong, otomatis unggah data saat ini
+              // Jika data di cloud masih kosong, otomatis unggah seluruh data saat ini ke cloud!
               uploadCurrentDataToCloud(true);
             }
           }, (err) => {
             console.warn("Firestore master_data listener error:", err);
-            updateCloudStatusBadge(false, "Koneksi Cloud Terputus");
+            if (err.message && (err.message.includes("NOT_FOUND") || err.message.includes("does not exist"))) {
+              updateCloudStatusBadge(false, "Firestore Database Belum Dibuat");
+            } else if (err.code === "permission-denied") {
+              updateCloudStatusBadge(false, "Izin Firestore Ditolak (Perlu Test Mode)");
+            } else {
+              updateCloudStatusBadge(false, "Menghubungkan ke Cloud...");
+            }
           });
 
           // Pasang Realtime Listener untuk Riwayat Mutasi Stok
@@ -5659,8 +5680,8 @@
       const modal = document.getElementById("cloudConfigModal");
       const input = document.getElementById("firebaseConfigInput");
       const savedConfig = localStorage.getItem(STORAGE_FIREBASE_KEY);
-      if (savedConfig && input) {
-        input.value = savedConfig;
+      if (input) {
+        input.value = savedConfig || JSON.stringify(DEFAULT_FIREBASE_CONFIG, null, 2);
       }
       if (modal) modal.classList.remove("hidden");
       if (window.lucide && typeof lucide.createIcons === "function") {
