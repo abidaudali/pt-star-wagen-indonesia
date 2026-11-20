@@ -5156,7 +5156,6 @@
     // 2. DATA PERSISTENCE & INITIALIZATION
     // ==========================================
     function loadData() {
-      // Prioritaskan sinkronisasi penuh dengan data master Excel (228 baris)
       let saved = localStorage.getItem(STORAGE_KEY);
       let localInv = null;
       if (saved) {
@@ -5164,41 +5163,30 @@
       }
       
       // Jika belum ada di v3, cek dari v2 atau v1
-      if (!localInv) {
+      if (!localInv || !Array.isArray(localInv) || localInv.length === 0) {
         const v2 = localStorage.getItem("swi_spareparts_data_v2");
         const v1 = localStorage.getItem("swi_spareparts_data_v1");
         if (v2) { try { localInv = JSON.parse(v2); } catch(e) {} }
         else if (v1) { try { localInv = JSON.parse(v1); } catch(e) {} }
       }
 
-      // Ambil riwayat penyesuaian stok (qty/dos/keterangan) yang pernah dilakukan user
-      const userCustom = {};
-      if (Array.isArray(localInv)) {
-        localInv.forEach(it => {
-          if (it && it.pn && (it.qty > 0 || it.dos > 0 || (it.keterangan && it.keterangan.trim()))) {
-            userCustom[it.pn.trim().toUpperCase()] = {
-              qty: it.qty,
-              dos: it.dos,
-              keterangan: it.keterangan
-            };
-          }
-        });
+      // Jika ada data tersimpan di localStorage, gunakan data tersebut sepenuhnya agar seluruh
+      // perubahan (Remarks PS/NON PS, min, max, prod, model, desc, maupun baris baru) tersimpan saat reload
+      if (Array.isArray(localInv) && localInv.length > 0) {
+        inventory = localInv.map((item, idx) => ({
+          ...item,
+          id: item.id || `sp_${idx + 1}`,
+          remarks: item.remarks || "PS",
+          qty: Number(item.qty) || 0,
+          dos: Number(item.dos) || 0,
+          keterangan: item.keterangan || ""
+        }));
+      } else {
+        // Hanya inisialisasi dari template Excel jika belum pernah ada data di localStorage
+        inventory = JSON.parse(JSON.stringify(INITIAL_DATA));
+        saveData();
       }
 
-      // Selalu inisialisasi dengan 228 part lengkap sesuai Excel
-      inventory = JSON.parse(JSON.stringify(INITIAL_DATA));
-
-      // Jika ada perubahan manual sebelumnya, terapkan pada part terkait
-      inventory.forEach(it => {
-        const key = (it.pn || "").trim().toUpperCase();
-        if (userCustom[key]) {
-          it.qty = userCustom[key].qty;
-          it.dos = userCustom[key].dos;
-          it.keterangan = userCustom[key].keterangan || it.keterangan;
-        }
-      });
-
-      saveData();
       refreshUI();
     }
 
