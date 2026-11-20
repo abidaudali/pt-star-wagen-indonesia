@@ -5587,11 +5587,11 @@
 
         if (window.firebase && firebase.firestore) {
           db = firebase.firestore();
-          isCloudConnected = true;
 
           // Pasang Realtime Listener untuk Master Data Inventory
           if (firestoreUnsubscribe) firestoreUnsubscribe();
           firestoreUnsubscribe = db.collection("swi_inventory").doc("master_data").onSnapshot((doc) => {
+            isCloudConnected = true;
             updateCloudStatusBadge(true, "Cloud Realtime Aktif");
             if (doc.exists) {
               const cloudData = doc.data();
@@ -5606,12 +5606,13 @@
             }
           }, (err) => {
             console.warn("Firestore master_data listener error:", err);
-            if (err.message && (err.message.includes("NOT_FOUND") || err.message.includes("does not exist"))) {
-              updateCloudStatusBadge(false, "Firestore Database Belum Dibuat");
+            isCloudConnected = false;
+            if (err.message && (err.message.includes("NOT_FOUND") || err.message.includes("does not exist") || err.code === "not-found")) {
+              updateCloudStatusBadge(false, "Klik 'Create database' di Firebase");
             } else if (err.code === "permission-denied") {
               updateCloudStatusBadge(false, "Izin Firestore Ditolak (Perlu Test Mode)");
             } else {
-              updateCloudStatusBadge(false, "Menghubungkan ke Cloud...");
+              updateCloudStatusBadge(false, "Database Cloud Belum Aktif");
             }
           });
 
@@ -5729,8 +5730,8 @@
     }
 
     async function uploadCurrentDataToCloud(silent = false) {
-      if (!isCloudConnected || !db) {
-        alert("Database cloud belum terhubung! Silakan atur konfigurasi Firebase terlebih dahulu.");
+      if (!db) {
+        if (!silent) alert("Database cloud belum terhubung! Silakan atur konfigurasi Firebase terlebih dahulu.");
         return;
       }
 
@@ -5749,13 +5750,20 @@
           });
         }
 
+        isCloudConnected = true;
+        updateCloudStatusBadge(true, "Cloud Realtime Aktif");
+
         if (!silent) {
           showToast(`Berhasil mengunggah ${inventory.length} part ke Cloud Realtime!`);
         }
       } catch (err) {
         console.error("Gagal mengunggah ke Cloud:", err);
         if (!silent) {
-          alert("Gagal mengunggah ke Cloud! Pesan error: " + err.message);
+          if (err.message && (err.message.includes("NOT_FOUND") || err.message.includes("does not exist"))) {
+            alert("Database Firestore belum diaktifkan di Google Firebase!\n\nSilakan buka:\nhttps://console.firebase.google.com/u/1/project/pt-swi-inventory/firestore\ndan klik tombol 'Create database'.");
+          } else {
+            alert("Gagal mengunggah ke Cloud: " + err.message);
+          }
         }
       }
     }
